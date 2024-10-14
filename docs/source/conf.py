@@ -38,7 +38,6 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
-#    "numpydoc",
     "nbsphinx",
     "myst_parser",
 #    'jupyter_sphinx'
