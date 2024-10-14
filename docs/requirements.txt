@@ -2,3 +2,7 @@ sphinx
 nbsphinx
 myst_parser
 pydata_sphinx_theme
+gpytorch==1.12
+torch>=2.0
+linear_operator>=0.5.2
+numpy
