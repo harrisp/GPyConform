@@ -1,5 +1,15 @@
 # GPyConform
-GPyConform extends the GPyTorch library to implement Gaussian Process Regression Conformal Prediction based on the approach described in [1]. 
+
+[![Python Version](https://img.shields.io/badge/Python-3.8+-orange.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![PyPI Version](https://img.shields.io/pypi/v/gpyconform.svg)](https://pypi.org/project/gpyconform)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/gpyconform.svg)](https://anaconda.org/conda-forge/gpyconform)
+[![Anaconda-Release](https://anaconda.org/conda-forge/gpyconform/badges/latest_release_date.svg)](https://anaconda.org/conda-forge/gpyconform)
+[![Documentation Status](https://readthedocs.org/projects/gpyconform/badge/?version=latest)](https://gpyconform.readthedocs.io/en/latest/?badge=latest)
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-yellow.svg)](https://github.com/harrisp/gpyconform/blob/main/LICENSE)
+[![Downloads](https://static.pepy.tech/badge/gpyconform)](https://pepy.tech/project/gpyconform)
+
+
+**GPyConform** extends the GPyTorch library to implement Gaussian Process Regression Conformal Prediction based on the approach described in [1]. 
 Designed to work seamlessly with Exact Gaussian Process (GP) models, GPyConform enhances GPyTorch by introducing the capability to generate 
 and evaluate both 'symmetric' and 'asymmetric' Conformal Prediction Intervals.
 
