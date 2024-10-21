@@ -3,20 +3,18 @@
 [![Python Version](https://img.shields.io/badge/Python-3.8+-orange.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![PyPI Version](https://img.shields.io/pypi/v/gpyconform.svg)](https://pypi.org/project/gpyconform)
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/gpyconform.svg)](https://anaconda.org/conda-forge/gpyconform)
-[![Anaconda-Release](https://anaconda.org/conda-forge/gpyconform/badges/latest_release_date.svg)](https://anaconda.org/conda-forge/gpyconform)
+[![GitHub (Pre-)Release Date](https://img.shields.io/github/release-date-pre/harrisp/gpyconform)](https://github.com/harrisp/gpyconform/blob/master/CHANGELOG.md)
 [![Documentation Status](https://readthedocs.org/projects/gpyconform/badge/?version=latest)](https://gpyconform.readthedocs.io/en/latest/?badge=latest)
-[![License](https://img.shields.io/badge/license-BSD--3--Clause-yellow.svg)](https://github.com/harrisp/gpyconform/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](https://github.com/harrisp/gpyconform/blob/master/LICENSE.txt)
 [![Downloads](https://static.pepy.tech/badge/gpyconform)](https://pepy.tech/project/gpyconform)
 
 
-**GPyConform** extends the GPyTorch library to implement Gaussian Process Regression Conformal Prediction based on the approach described in [1]. 
-Designed to work seamlessly with Exact Gaussian Process (GP) models, GPyConform enhances GPyTorch by introducing the capability to generate 
-and evaluate both 'symmetric' and 'asymmetric' Conformal Prediction Intervals.
+**GPyConform** extends the [GPyTorch](https://gpytorch.ai) library by implementing (Full) Conformal Prediction for Gaussian Process Regression based on the approach described in [1]. Designed to work seamlessly with Exact Gaussian Process (GP) models, GPyConform enhances GPyTorch by introducing the capability to generate and evaluate both 'symmetric' and 'asymmetric' Conformal Prediction Intervals.
 
 ## Key Features
 - **Provides Provably Valid Prediction Intervals**: Provides Prediction Intervals with guaranteed coverage under minimal assumptions (data exchangeability).
-- **Inherits All GPyTorch Functionality**: Utilizes the robust and efficient GP modeling capabilities of GPyTorch.
-- **Supports Both Symmetric and Asymmetric Prediction Intervals**: Implements both Full Conformal Prediction approaches for constructing Prediction Intervals.
+- **Full Utilization of GPyTorch**: Leverages the robust and efficient GP modeling capabilities of GPyTorch.
+- **Supports Both Symmetric and Asymmetric Prediction Intervals**: Implements both the symmetric and asymmetric Full Conformal Prediction approaches for constructing Prediction Intervals.
 
 ### Note
 Currently, GPyConform is tailored specifically for Exact GP models combined with any covariance function that employs an exact prediction strategy.
