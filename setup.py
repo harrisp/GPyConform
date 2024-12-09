@@ -5,7 +5,7 @@ with open('README.md', 'r', encoding='utf-8') as fh:
 
 setup(
     name='gpyconform',
-    version='0.1.0',
+    version='0.1.1',
     author='Harris Papadopoulos',
     author_email='h.papadopoulos@frederick.ac.cy',
     description='Extends GPyTorch with Gaussian Process Regression Conformal Prediction',
@@ -14,11 +14,11 @@ setup(
     url='https://github.com/harrisp/GPyConform',
     project_urls={
         'Bug Tracker': 'https://github.com/harrisp/GPyConform/issues',
-        # 'Documentation': 'https://gpyconform.readthedocs.io',
+        'Documentation': 'https://gpyconform.readthedocs.io',
     },
     packages=find_packages(),
     install_requires=[
-        'gpytorch==1.12',
+        'gpytorch==1.13',
         'torch>=2.0',
         'linear_operator>=0.5.3',
         'numpy'

@@ -10,7 +10,7 @@ class PredictionIntervals:
     """
     
     def __init__(self, conf_levels, all_pis):
-        self.conf_levels = conf_levels
+        self.conf_levels = torch.round(conf_levels * 1e8) / 1e8 
         self.all_pis = all_pis
     
     def __call__(self, conf_level=None):
@@ -58,7 +58,9 @@ class PredictionIntervals:
 
         if conf_level is None:
             # Create a dictionary of all prediction intervals, using confidence levels as keys
-            return {round(float(cl), 5): self.all_pis[i, :, :] for i, cl in enumerate(self.conf_levels)}
+            return {float(cl): self.all_pis[i, :, :] for i, cl in enumerate(self.conf_levels)}
+        else:
+            conf_level = torch.round(torch.tensor(conf_level) * 1e8) / 1e8
 
         indices = torch.nonzero(self.conf_levels == conf_level, as_tuple=True)[0]
         if indices.numel() > 0:
@@ -128,6 +130,7 @@ class PredictionIntervals:
     
         results = {}
 
+        conf_level = torch.round(torch.tensor(conf_level) * 1e8) / 1e8
         indices = torch.nonzero(self.conf_levels == conf_level, as_tuple=True)[0]
         if indices.numel() > 0:
             conf_index = indices[0]
