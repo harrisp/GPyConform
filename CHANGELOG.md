@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.2.0 (26/02/2026)
+
+### Features
+- **Inductive (Split) Conformal Prediction (ICP) for GPR**: Added ICP support with `GPRICPWrapper` (GPyTorch model wrapper) and a model-agnostic `InductiveConformalRegressor`.
+- **Tensor split utilities**: Added `tensor_train_test_split` and `tensor_train_cal_split` to conveniently create train/test and proper-train/calibration splits directly on `torch.Tensor`s.
+
+### Updates
+- **Configurable patching via environment variable**: Added `GPYCONFORM_AUTOPATCH` to control when/if the internal GPyTorch prediction-strategy patch is applied (eager, lazy, or forbidden). Exposed `apply_patches()` / `is_patched()` for manual control.
+
+### Fixes
+- **Precision / numerical stability improvements**: Improved numerical robustness in interval construction and confidence-level handling.
+
 ## v0.1.1 (09/12/2024)
 
 ### Updates

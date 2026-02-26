@@ -2,6 +2,7 @@
 
 import warnings
 import torch
+import os
 
 from gpytorch import settings
 from gpytorch.distributions import MultivariateNormal
@@ -9,9 +10,10 @@ from gpytorch.utils.generic import length_safe_zip
 from gpytorch.utils.warnings import GPInputWarning
 from gpytorch.models import ExactGP
 from gpytorch.models.exact_prediction_strategies import prediction_strategy
+from .exact_prediction_strategies_cp import apply_patches, is_patched
 
 class ExactGPCP(ExactGP):
-    r"""
+    """
     Extends GPyTorch's ExactGP to produce Conformal Prediction Intervals, specifically modifying behavior 
     only in the evaluation (``.eval()``) mode. In particular, it implements both the symmetric approach described 
     in [1] and its asymmetric version, following the approach described in Chapter 2.3 of [2].
@@ -20,31 +22,25 @@ class ExactGPCP(ExactGP):
 
     Parameters
     ----------
-    train_inputs : torch.Tensor of shape (n, d), denoted as :math:`\mathbf{X}`
+    train_inputs : torch.Tensor of shape (n_train, n_features)
         Training features.
-
-    train_targets : torch.Tensor of shape (n), denoted as :math:`\mathbf{y}`
+    train_targets : torch.Tensor of shape (n_train,)
         Training targets.
-
     likelihood : gpytorch.likelihoods.GaussianLikelihood
-        The Gaussian likelihood defining the observational distribution, necessary for exact inference.
-
-    cpmode : 'symmetric' or 'asymmetric' or None, default='symmetric' 
+        Gaussian likelihood (required for this transductive CP implementation).
+        Other likelihoods are not supported.
+    cpmode : {'symmetric', 'asymmetric', None}, optional, default='symmetric' 
         Mode of the Conformal Prediction: 
+        - ``'symmetric'``: Employs the absolute residual nonconformity measure approach as described in [1].
+        - ``'asymmetric'``: Employs the asymmetric version of the nonconformity measure defined in [1], following the approach described in Chapter 2.3 of [2].
+        - ``None``: Reverts to standard ``ExactGP`` behavior.
 
-        - 'symmetric': Employs the absolute residual nonconformity measure approach as described in [1].
-        - 'asymmetric': Employs the asymmetric version of the nonconformity measure defined in [1], following the approach described in Chapter 2.3 of [2].
-        - None: Reverts to GPyTorch's ExactGP behavior.
-
-    Raises
-    ------
-    ValueError
-        If ``cpmode`` is not 'symmetric', 'asymmetric', or None.
-
-    Note
-    ----
-    The ``cpmode`` property can change at any time without affecting the model.
-
+    Notes
+    -----
+    - The ``cpmode`` property can be changed at any time without retraining.
+    - Internally, GPyConform applies a small monkey-patch to GPyTorch’s default
+      exact prediction strategy to expose CP Prediction Intervals. The constructor 
+      ensures this is applied unless patching is explicitly disabled.
 
     References
     ----------
@@ -57,8 +53,8 @@ class ExactGPCP(ExactGP):
     Springer, 2023. DOI: `10.1007/978-3-031-06649-8 <https://doi.org/10.1007/978-3-031-06649-8>`_.
 
 
-    Example
-    -------
+    Examples
+    --------
     Assuming ``train_x`` and ``train_y`` are torch tensors with the training features and targets respectively,
     a Gaussian Process Regression model with Conformal Prediction capabilities can be formed by:
     
@@ -78,20 +74,25 @@ class ExactGPCP(ExactGP):
 
         # Initialize likelihood and model
         likelihood = gpytorch.likelihoods.GaussianLikelihood()
-        model = MyGPCP(train_x, train_y, likelihood)
+        model = MyGPCP(train_x, train_y, likelihood, 'symmetric')
         
         # If needed change the cpmode property at any time
         model.cpmode = 'asymmetric'
 
-    Note
-    ----
-    Any mean function from ``gpytorch.means`` and any kernel function that employs an exact prediction strategy
-    from ``gpytorch.kernels`` can be used with GPyConform.
+    Notes
+    -----
+    - Any mean module from ``gpytorch.means`` and any covariance module from
+      ``gpytorch.kernels`` that is compatible with the
+      ``ExactPredictionStrategy`` (e.g. RBF, Matern, SpectralMixture, and
+      standard Scale/Add/Product compositions) can be used.
+    - Approximation kernels (e.g. ``GridInterpolationKernel``,
+      ``InducingPointKernel``) are not supported by this transductive approach.
 
     """
 
     def __init__(self, train_inputs, train_targets, likelihood, cpmode='symmetric'):
         self.cpmode = cpmode
+        _ensure_patched()
         super().__init__(train_inputs, train_targets, likelihood)
 
     @property
@@ -101,43 +102,50 @@ class ExactGPCP(ExactGP):
 
     @cpmode.setter
     def cpmode(self, value):
-        """Set the mode of Conformal Prediction, ensuring it is one of the acceptable values."""
+        """
+        Set the mode of Conformal Prediction, ensuring it is one of the acceptable values.
+        
+        Parameters
+        ----------
+        value : {'symmetric', 'asymmetric', None}
+            New conformal prediction mode.
+       """
         if value not in ['symmetric', 'asymmetric', None]:
             raise ValueError("cpmode must be 'symmetric', 'asymmetric', or None")
         self._cpmode = value
         
     def __call__(self, *args, **kwargs):
-        r"""
+        """
         In evaluation (``.eval()``) mode, calling this model with test inputs will return the symmetric or 
-        asymmetric Conformal Prediction Intervals depending on ``cpmode``. Parameters for ``.eval()`` mode:
+        asymmetric Conformal Prediction Intervals depending on ``cpmode``.
 
-        Parameters
-        ----------
-        test_inputs : torch.Tensor
+        Parameters (in CP / ``.eval()`` mode)
+        -------------------------------------
+        test_inputs : torch.Tensor of shape (n_test, n_features)
             Test features.
         gamma : float, default=2
-            The gamma parameter of the nonconformity measure, which controls its sensitivity.
-        confs : torch.Tensor or numpy.array or list, default=torch.tensor([0.95])
-            Confidence levels for which to return Prediction Intervals. Each confidence level must be 
-            a float in the range (0,1).
+            Nonconformity measure parameter controlling sensitivity to predictive
+            variance differences.
+        confs : array-like of float in (0, 1), optional, default=[0.95]
+            Confidence levels for which to return Prediction Intervals.
     
-        Raises
-        ------
-        ValueError
-            If any confidence level in ``confs`` is not in the range (0,1).
-
         Returns
         -------
-        PIs : gpyconform.PredictionIntervals
-            An object containing the Prediction Intervals for each confidence level in ``confs``.
+        PredictionIntervals : gpyconform.PredictionIntervals
+            If CP is enabled (``cpmode`` not ``None``) and the model is in
+            ``.eval()`` mode, returns the Prediction Intervals for each 
+            confidence level in ``confs``.
+        gpytorch.distributions.MultivariateNormal
+            If CP is disabled (``cpmode=None``) or the model is not in ``.eval()`` 
+            mode, returns the usual latent posterior from ``ExactGP``.
 
-        Note
-        ----
+        Notes
+        -----
         The ``gamma`` and ``confs`` parameters are used only in ``.eval()`` mode. They are ignored in 
         all other cases.
 
-        Example
-        -------
+        Examples
+        --------
         Assuming ``model`` is an instance of a GP Conformal Regressor, with optimized hyperparameters, 
         and ``test_x`` is a torch tensor containing the test features. The Conformal Prediction Intervals 
         at the 90%, 95%, and 99% confidence levels, with the nonconformity measure parameter ``gamma`` 
@@ -152,10 +160,7 @@ class ExactGPCP(ExactGP):
         """
 
         gamma = kwargs.pop('gamma', 2)
-        confs = kwargs.pop('confs', torch.tensor([0.95]))
-
-        if any((conf < 0 or conf > 1) for conf in confs):
-            raise ValueError("All confidence levels in 'confs' must be in (0,1)")
+        confs = kwargs.pop('confs', None)
 
         if self.training or settings.prior_mode.on() or self.train_inputs is None or self.train_targets is None or self.cpmode is None:
             return super().__call__(*args, **kwargs)    
@@ -197,7 +202,7 @@ class ExactGPCP(ExactGP):
 
             # Get the joint distribution for training/test data
             full_output = super(ExactGP, self).__call__(*full_inputs, **kwargs)
-            if settings.debug().on():
+            if settings.debug.on():
                 if not isinstance(full_output, MultivariateNormal):
                     raise RuntimeError("ExactGP.forward must return a MultivariateNormal")
             full_mean, full_covar = full_output.loc, full_output.lazy_covariance_matrix
@@ -207,3 +212,14 @@ class ExactGPCP(ExactGP):
                 out = self.prediction_strategy.exact_prediction(full_mean, full_covar, gamma=gamma, confs=confs, cpmode=self.cpmode)
 
             return out
+
+def _ensure_patched():
+    # If user explicitly forbids patching, fail fast with a clear message
+    if os.getenv("GPYCONFORM_AUTOPATCH", "").strip() == "0":
+        raise RuntimeError(
+            "ExactGPCP requires the gpyconform prediction-strategy patch, "
+            "but GPYCONFORM_AUTOPATCH=0 forbids it. Either unset that env var, "
+            "set it to 1, or call gpyconform.apply_patches() before using ExactGPCP."
+        )
+    if not is_patched():
+        apply_patches()

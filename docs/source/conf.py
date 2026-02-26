@@ -17,14 +17,14 @@ sys.path.insert(0, os.path.abspath('../../'))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'GPyConform'
-copyright = '2024, Harris Papadopoulos'
+copyright = '2024-2026, Harris Papadopoulos'
 author = 'Harris Papadopoulos'
 
 # The short X.Y version
-version = '0.1.1'
+version = '0.2.0'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1.1'
+release = '0.2.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

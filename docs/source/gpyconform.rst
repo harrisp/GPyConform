@@ -1,17 +1,26 @@
-The GPyConform package
+The GPyConform Package
 ======================
 
 .. module:: gpyconform
 
-Exact GP Regression with Conformal Prediction
----------------------------------------------
+Transductive (Full) Conformal Prediction
+----------------------------------------
 
 .. autoclass:: ExactGPCP
    :special-members: __call__
    :exclude-members: __init__, cpmode
-   
-Conformal Prediction Intervals Class
-------------------------------------
+
+Inductive (Split) Conformal Prediction
+--------------------------------------
+
+.. autoclass:: InductiveConformalRegressor
+   :special-members: __call__
+
+.. autoclass:: GPRICPWrapper
+   :members: calibrate, predict, refresh_model
+
+Conformal Prediction Intervals
+------------------------------
 
 .. autoclass:: PredictionIntervals
    :members: evaluate

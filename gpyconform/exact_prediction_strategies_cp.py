@@ -11,7 +11,7 @@ from gpytorch.models.exact_prediction_strategies import (
      DefaultPredictionStrategy
  )
 from gpyconform.prediction_intervals import PredictionIntervals
-
+from gpyconform.constants import _CONF_SCALE, _GAMMA_INF_THRESHOLD
 
 def update_chol_factor(L, b, c, new_factor):
     """
@@ -24,7 +24,7 @@ def update_chol_factor(L, b, c, new_factor):
         Current Cholesky factor of the covariance matrix
     b : torch.Tensor
         Cross-covariance vector between new data point and existing data
-    c : float
+    c : float or torch.Tensor of shape ()
         Variance of the new data point
     new_factor : torch.Tensor
         Preallocated tensor with the values of L
@@ -36,12 +36,15 @@ def update_chol_factor(L, b, c, new_factor):
         The updated Cholesky factor
     """
 
-    y = L.solve(b).squeeze_(-1)
-    d = torch.sqrt(c - torch.dot(y, y))
-    
-    n = y.size(0)
+    y = L.solve(b)  # keep 1D or 2D rhs; L.solve handles both
+    if y.dim() > 1 and y.size(-1) == 1:
+        y = y.squeeze(-1)
+    # Stabilize Schur complement
+    s = c - torch.dot(y, y)
+    eps = torch.finfo(s.dtype).eps * 32
+    d = torch.sqrt((s + eps).clamp_min(0))  # jitter + clamp
 
-    # Update the preallocated tensor
+    n = y.size(0)
     new_factor[n, :n].copy_(y)
     new_factor[n, n] = d
     new_factor[:n, n].zero_()
@@ -56,7 +59,7 @@ def default_exact_prediction(self, joint_mean, joint_covar, **kwargs):
         cpmode = kwargs.pop('cpmode', 'symmetric')
         gamma = kwargs.pop('gamma', 2)
         confs = kwargs.pop('confs', None)
-
+        
         with torch.no_grad():
             # Find the components of the distribution that contain test data
             test_mean = joint_mean[..., self.num_train :]
@@ -78,21 +81,27 @@ def default_exact_prediction(self, joint_mean, joint_covar, **kwargs):
 
             # Ensure all input tensors are on the same device as L
             device = L.device
-            assert test_mean.device == device
-            assert test_train_covar.device == device
-            assert test_test_covar_diag.device == device
-            assert self.train_labels.device == device
+            dtype = L.dtype
+            test_mean = test_mean.to(device=device, dtype=dtype)
+            test_test_covar_diag = test_test_covar_diag.to(device=device, dtype=dtype)
+            self.train_labels = self.train_labels.to(device=device, dtype=dtype)
+            if not isinstance(test_train_covar, LinearOperator):
+                test_train_covar = test_train_covar.to(device=device, dtype=dtype)
 
             if confs is None:
-                confs = torch.tensor([0.95], device=device)
-            elif isinstance(confs, np.ndarray):
-                confs = torch.tensor(confs, device=device)
-            elif isinstance(confs, list):
-                confs = torch.tensor(confs, device=device)
-            elif not isinstance(confs, torch.Tensor):
-                raise ValueError("Confs must be a numpy array, list, or torch tensor")
+                confs = torch.tensor([0.95], device=device, dtype=torch.float64)
+            elif isinstance(confs, (np.ndarray, list, tuple)):
+                confs = torch.tensor(confs, device=device, dtype=torch.float64)
+            elif isinstance(confs, torch.Tensor):
+                confs = confs.to(device=device, dtype=torch.float64)
             else:
-                confs = confs.to(device)
+                raise TypeError("'confs' must be a torch.Tensor, numpy.ndarray, list, or tuple.")
+
+            if confs.numel() == 0:
+                raise ValueError("'confs' must contain at least one confidence level.")
+
+            if not torch.all((confs > 0.0) & (confs < 1.0)):
+                raise ValueError("All confidence levels in 'confs' must be strictly in (0, 1).")
 
             # Add noise to the test covariance diagonal
             test_test_covar_diag += self.likelihood.noise
@@ -116,44 +125,58 @@ def default_exact_prediction(self, joint_mean, joint_covar, **kwargs):
 def _prediction_regions_symmetric(self, test_mean: Tensor, test_train_covar: LinearOperator, test_test_covar_diag: Tensor, L: LinearOperator, Amult: Tensor, Bmult: Tensor, confs: Tensor, gamma: float):
     device = L.device
     dtype = L.dtype
-
-    PIs = torch.zeros(len(confs), test_mean.size(-1), 2, device=device)
-    power = 1 - 1 / gamma
+    eps = torch.finfo(torch.float64).eps * 32
+    
+    PIs = torch.zeros(len(confs), test_mean.size(-1), 2, device=device, dtype=torch.float64)
+    if gamma >= _GAMMA_INF_THRESHOLD:
+        power = None
+    else:
+        gamma = float(gamma)
+        power = torch.as_tensor((gamma - 1.0)/gamma, device=L.device, dtype=torch.float64)
+        
     train_size = L.size(-1)
-    identity = torch.eye(train_size+1, dtype=dtype, device=device)
-    inf_ninf_tensor = torch.tensor([float('inf'), float('-inf')], dtype=dtype, device=device)
-    new_factor = torch.zeros((train_size+1, train_size+1), device=device, dtype=dtype)
+    train_size1 = train_size + 1
+    confs_int = torch.round(confs * _CONF_SCALE).to(torch.int64)
+    identity = torch.eye(train_size1, device=device, dtype=dtype)
+    new_factor = torch.zeros((train_size1, train_size1), device=device, dtype=dtype)
     new_factor[:train_size, :train_size].copy_(L.to_dense())
-
+    inf_ninf_tensor = torch.tensor([float('inf'), float('-inf')], device=device, dtype=torch.float64)
+    zero64 = torch.zeros((), device=device, dtype=torch.float64)
+    test_mean = test_mean.double()
+    
     for i in range(test_mean.size(-1)):
         # Calculate the updated cholesky factor
         b = test_train_covar[..., i, :]
         c = test_test_covar_diag[..., i]
         newL = update_chol_factor(L, b, c, new_factor)
 
-        A = newL._cholesky_solve(Amult, upper=False).squeeze_(-1)
-        B = newL._cholesky_solve(Bmult, upper=False).squeeze_(-1)
+        A = newL._cholesky_solve(Amult, upper=False).squeeze_(-1).double()
+        B = newL._cholesky_solve(Bmult, upper=False).squeeze_(-1).double()
 
-        D = torch.pow(newL._cholesky_solve(identity, upper=False).diagonal(dim1=-1, dim2=-2), power)
+        D = newL._cholesky_solve(identity, upper=False).diagonal(dim1=-1, dim2=-2).double()
+        if power is not None:
+            D = torch.pow(D, power)
+
         A /= D
         B /= D
         
         # Element-wise modification of A and B
-        modifier = ((2 * (B >= 0)) - 1)
+        modifier = torch.where(B >= 0, torch.ones_like(B), -torch.ones_like(B))
         A *= modifier
         B *= modifier
 
         # Extract the test example and remove it from A and B
-        Atest = A[-1].item()
-        Btest = B[-1].item()
+        Atest = A[-1]
+        Btest = B[-1]
         A = A[:-1]
         B = B[:-1]
 
         listLl = []
         listRr = []
         
-        mask_lt = B < Btest
-        mask_gt = B > Btest
+        mask_eq = torch.isclose(B, Btest, atol=eps, rtol=0.0)    
+        mask_lt = (B < Btest) & ~mask_eq
+        mask_gt = (B > Btest) & ~mask_eq
 
         if mask_lt.any():
             Axx = A[mask_lt]
@@ -173,20 +196,22 @@ def _prediction_regions_symmetric(self, test_mean: Tensor, test_train_covar: Lin
             listLl.extend([-torch.inf + torch.zeros_like(min_Pxx), max_Pxx])
             listRr.extend([min_Pxx, torch.inf + torch.zeros_like(max_Pxx)])
             
-        if Btest != 0:
-            xx = B == Btest
-            Axx = A[xx]
-            Bxx = B[xx]
+        if not torch.isclose(Btest, zero64, atol=eps, rtol=0.0):
+            Axx = A[mask_eq]
+            Bxx = B[mask_eq]
             Pxx = - (Axx + Atest) / (2 * Bxx)
 
-            greater = Axx > Atest
-            lesser = Axx < Atest
-            equal = Axx == Atest
+            equal = torch.isclose(Axx, Atest, atol=eps, rtol=0.0)   
+            greater = (Axx > Atest)  & ~equal
+            lesser = (Axx < Atest) & ~equal
 
             listLl.extend([Pxx[greater], -torch.inf + torch.zeros_like(Pxx[lesser]), -torch.inf + torch.zeros_like(Pxx[equal])])
             listRr.extend([torch.inf + torch.zeros_like(Pxx[greater]), Pxx[lesser], torch.inf + torch.zeros_like(Pxx[equal])])
         else:
-            condition = (B == 0) & (torch.abs(A) >= torch.abs(Atest))
+            condition = torch.isclose(B, zero64, atol=eps, rtol=0.0) & (
+                (A.abs() > Atest.abs()) |
+                torch.isclose(A.abs(), Atest.abs(), atol=eps, rtol=0.0)
+                )
             listLl.append(-torch.inf + torch.zeros_like(A[condition]))
             listRr.append(torch.inf + torch.zeros_like(A[condition]))
 
@@ -200,59 +225,66 @@ def _prediction_regions_symmetric(self, test_mean: Tensor, test_train_covar: Lin
             
         P = torch.unique(torch.cat([Ll, Rr, inf_ninf_tensor]), sorted=True)
 
-        Ll.unsqueeze_(1)
-        Rr.unsqueeze_(1)
+        Ll = Ll.unsqueeze_(1)
+        Rr = Rr.unsqueeze_(1)
     
         Llcount = (Ll == P).sum(dim=0)
         Rrcount = (Rr == P).sum(dim=0)
 
-        M = torch.zeros(P.numel(), device=P.device)
+        M = torch.zeros(P.numel(), device=device, dtype=torch.int64)
         M[0] = 1
         M += Llcount
         M[1:] -= Rrcount[:-1]
 
         M = M.cumsum(0)
-        M /= train_size+1
 
-        for j in range(len(confs)):
-            Mbig = M > 1-confs[j]
-            indices_of_ones = torch.nonzero(Mbig).squeeze_(-1)
+        for j in range(len(confs_int)):
+            Mbig = M * _CONF_SCALE > (_CONF_SCALE - confs_int[j]) * train_size1
+            indices_of_ones = torch.nonzero(Mbig, as_tuple=True)[0]
                 
             if indices_of_ones.numel() > 0:
-                min_index = indices_of_ones.min().item()
-                max_index = indices_of_ones.max().item()
+                min_index = indices_of_ones.min()
+                max_index = indices_of_ones.max()
             
                 PIs[j,i,0] = P[min_index]
                 PIs[j,i,1] = P[max_index]
             else:
                 max_M = M.max()
-                max_indices = torch.nonzero(M == max_M).flatten()
-                min_index = max_indices.min().item()
-                max_index = max_indices.max().item()
+                max_indices = torch.nonzero(M == max_M, as_tuple=True)[0]
+                min_index = max_indices.min()
+                max_index = max_indices.max()
                 Point = (P[min_index] + P[max_index]) / 2
                 PIs[j,i,0] = Point
                 PIs[j,i,1] = Point
-        
+    
     return PredictionIntervals(confs, PIs)
 
 
 def _prediction_regions_asymmetric(self, test_mean: Tensor, test_train_covar: LinearOperator, test_test_covar_diag: Tensor, L: LinearOperator, Amult: Tensor, Bmult: Tensor, confs: Tensor, gamma: float):
     device = L.device
     dtype = L.dtype
+    eps = torch.finfo(torch.float64).eps * 32
 
-    PIs = torch.zeros(len(confs), test_mean.size(-1), 2, device=device)
-    power = 1 - 1 / gamma
+    PIs = torch.zeros(len(confs), test_mean.size(-1), 2, device=device, dtype=torch.float64)
+    if gamma >= _GAMMA_INF_THRESHOLD:
+        power = None
+    else:
+        gamma = float(gamma)
+        power = torch.as_tensor((gamma - 1.0)/gamma, device=L.device, dtype=torch.float64)
+        
     train_size = L.size(-1)
-    HalfDeltas = (1-confs)/2
-    Llindex = (HalfDeltas * (train_size + 1)).floor().to(torch.int64) - 1
-    Uuindex = (1 - HalfDeltas * (train_size + 1)).ceil().to(torch.int64) - 1
-    Ll = torch.zeros(train_size, dtype=dtype, device=device)
-    Uu = torch.zeros(train_size, dtype=dtype, device=device)
-    identity = torch.eye(train_size + 1, dtype=dtype, device=device)
-    new_factor = torch.zeros((train_size + 1, train_size + 1), device=device, dtype=dtype)
+    train_size1 = train_size + 1
+    confs_int = torch.round(confs * _CONF_SCALE).to(torch.int64)
+    Llindex = ((_CONF_SCALE - confs_int) * train_size1) // (2 * _CONF_SCALE) - 1
+    Uuindex = (((_CONF_SCALE + confs_int) * train_size1 + 2 * _CONF_SCALE - 1) // (2 * _CONF_SCALE)) - 1
+    Ll = torch.zeros(train_size, device=device, dtype=torch.float64)
+    Uu = torch.zeros(train_size, device=device, dtype=torch.float64)
+    identity = torch.eye(train_size1, device=device, dtype=dtype)
+    new_factor = torch.zeros((train_size1, train_size1), device=device, dtype=dtype)
     new_factor[:train_size, :train_size].copy_(L.to_dense())
     neg_inf = float('-inf')
     pos_inf = float('inf')
+    test_mean = test_mean.double()
 
     for i in range(test_mean.size(-1)):
         # Initialize lower (l_i) and upper (u_i)
@@ -264,21 +296,25 @@ def _prediction_regions_asymmetric(self, test_mean: Tensor, test_train_covar: Li
         c = test_test_covar_diag[..., i]
         newL = update_chol_factor(L, b, c, new_factor)
 
-        A = newL._cholesky_solve(Amult, upper=False).squeeze_(-1)
-        B = newL._cholesky_solve(Bmult, upper=False).squeeze_(-1)
+        A = newL._cholesky_solve(Amult, upper=False).squeeze_(-1).double()
+        B = newL._cholesky_solve(Bmult, upper=False).squeeze_(-1).double()
 
-        D = torch.pow(newL._cholesky_solve(identity, upper=False).diagonal(dim1=-1, dim2=-2), power)
+        D = newL._cholesky_solve(identity, upper=False).diagonal(dim1=-1, dim2=-2).double()
+        if power is not None:
+            D = torch.pow(D, power)
+
         A /= D
         B /= D
         
         # Extract the test example and remove it from A and B
-        Atest = A[-1].item()
-        Btest = B[-1].item()
+        Atest = A[-1]
+        Btest = B[-1]
         A = A[:-1]
         B = B[:-1]
 
         # Condition: B < Btest
-        mask_lt = B < Btest
+        mask_eq = torch.isclose(B, Btest, atol=eps, rtol=0.0)
+        mask_lt = (B < Btest) & ~mask_eq
         Ll[mask_lt] = (A[mask_lt] - Atest) / (Btest - B[mask_lt])
         Uu[mask_lt] = Ll[mask_lt]
 
@@ -304,13 +340,18 @@ def _prediction_regions_asymmetric(self, test_mean: Tensor, test_train_covar: Li
 def original_exact_prediction(*args, **kwargs):
     pass
 
+def is_patched():
+    return hasattr(DefaultPredictionStrategy, "orig_exact_prediction")
+
 def apply_patches():
     # Check if patch has already been applied
-    if not hasattr(DefaultPredictionStrategy, 'orig_exact_prediction'):
-        # Save original methods as class attributes
-        DefaultPredictionStrategy.orig_exact_prediction = DefaultPredictionStrategy.exact_prediction
+    if is_patched():
+        return
+    
+    # Save original methods as class attributes
+    DefaultPredictionStrategy.orig_exact_prediction = DefaultPredictionStrategy.exact_prediction
 
-        # Apply monkey patches
-        DefaultPredictionStrategy.exact_prediction = default_exact_prediction
-        DefaultPredictionStrategy._prediction_regions_symmetric = _prediction_regions_symmetric
-        DefaultPredictionStrategy._prediction_regions_asymmetric = _prediction_regions_asymmetric
+    # Apply monkey patches
+    DefaultPredictionStrategy.exact_prediction = default_exact_prediction
+    DefaultPredictionStrategy._prediction_regions_symmetric = _prediction_regions_symmetric
+    DefaultPredictionStrategy._prediction_regions_asymmetric = _prediction_regions_asymmetric
