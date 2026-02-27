@@ -19,7 +19,7 @@ Key Features
 - **Symmetric and Asymmetric PIs** in both frameworks.
 - **Normalized Nonconformity** that leverages the GP predictive variance for tighter, adaptive intervals.
 - **Unified PI Container + Metrics**: ``PredictionIntervals`` supports retrieving intervals at multiple confidence levels and evaluating empirical coverage error and interval widths.
-- **Torch-native + GPU-friendly**: Works directly with ``torch.Tensor``s and can leverage GPU acceleration.
+- **Torch-native + GPU-friendly**: Works directly with ``torch.Tensor``\s and can leverage GPU acceleration.
 
 .. note::
 
