@@ -5,7 +5,7 @@ with open('README.md', 'r', encoding='utf-8') as fh:
 
 setup(
     name='gpyconform',
-    version='0.2.0',
+    version='0.2.0.post1',
     author='Harris Papadopoulos',
     author_email='h.papadopoulos@frederick.ac.cy',
     description='Extends GPyTorch with Gaussian Process Regression Conformal Prediction',
@@ -20,7 +20,7 @@ setup(
     install_requires=[
         'gpytorch>=1.12,<1.15.1',
         'torch>=2.0',
-        'linear_operator>=0.6',
+        'linear-operator',
         'numpy'
     ],
     classifiers=[
@@ -28,6 +28,6 @@ setup(
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
     ],
-    python_requires='>=3.8',
+    python_requires='>=3.10',
     keywords='Gaussian Process Regression, Conformal Prediction, Prediction Regions, Prediction Intervals, Uncertainty Quantification, Coverage Guarantee, Normalized Nonconformity'
 )

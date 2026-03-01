@@ -1,6 +1,6 @@
 # GPyConform
 
-[![Python Version](https://img.shields.io/badge/Python-3.8+-orange.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/Python-3.10+-orange.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![PyPI Version](https://img.shields.io/pypi/v/gpyconform.svg)](https://pypi.org/project/gpyconform)
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/gpyconform.svg)](https://anaconda.org/conda-forge/gpyconform)
 [![GitHub (Pre-)Release Date](https://img.shields.io/github/release-date-pre/harrisp/gpyconform)](https://github.com/harrisp/gpyconform/blob/master/CHANGELOG.md)

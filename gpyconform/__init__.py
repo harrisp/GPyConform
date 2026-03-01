@@ -13,7 +13,7 @@ GPYCONFORM_AUTOPATCH
       instantiated, or call :func:`gpyconform.apply_patches` manually.
 """
 
-__version__ = '0.2.0'
+__version__ = '0.2.0.post1'
 
 import os
 from .exact_prediction_strategies_cp import apply_patches, is_patched

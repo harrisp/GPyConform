@@ -2,6 +2,7 @@ The GPyConform Package
 ======================
 
 .. module:: gpyconform
+.. currentmodule:: gpyconform
 
 Transductive (Full) Conformal Prediction
 ----------------------------------------

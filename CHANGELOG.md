@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.0.post1 (01/03/2026)
+
+### Fixes
+- Documentation build/configuration fixes.
+- Packaging metadata updates (no functional code changes).
+
+
 ## v0.2.0 (26/02/2026)
 
 ### Features
@@ -11,6 +18,7 @@
 
 ### Fixes
 - **Precision / numerical stability improvements**: Improved numerical robustness in interval construction and confidence-level handling.
+
 
 ## v0.1.1 (09/12/2024)
 

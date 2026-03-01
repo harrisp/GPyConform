@@ -12,6 +12,7 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../../'))
+import gpyconform
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -20,11 +21,17 @@ project = 'GPyConform'
 copyright = '2024-2026, Harris Papadopoulos'
 author = 'Harris Papadopoulos'
 
+# The full version, including alpha/beta/rc tags
+release = gpyconform.__version__
+
 # The short X.Y version
-version = '0.2.0'
+version = ".".join(release.split(".")[:3])
+
+# The short X.Y version
+# version = '0.2.0'
 
 # The full version, including alpha/beta/rc tags
-release = '0.2.0'
+# release = '0.2.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

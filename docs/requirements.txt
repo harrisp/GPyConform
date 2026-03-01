@@ -1,8 +1,8 @@
 sphinx
 nbsphinx
 myst-parser
-pydata_sphinx_theme
+pydata-sphinx-theme
 gpytorch>=1.12,<1.15.1
 torch>=2.0
-linear_operator>=0.6
+linear-operator
 numpy
