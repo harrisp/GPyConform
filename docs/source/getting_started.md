@@ -66,7 +66,7 @@ test_y = torch.sin(test_x * (2 * math.pi)) + torch.randn(test_x.size()) * math.s
 ### Setting up the model
 
 The model is constructed in exactly the same way as with GPyTorch, but using `gpyconform.ExactGPCP` instead of `gpytorch.models.ExactGP`. 
-For details please refer to the [GPyTorch documentation](https://gpytorch.readthedocs.io/en/latest/).
+For details please refer to the [GPyTorch documentation](https://docs.gpytorch.ai/en/latest/).
 
 ```python
 class ExactGPCPModel(gpyconform.ExactGPCP):
@@ -295,7 +295,7 @@ prop_train_x, cal_x, prop_train_y, cal_y = tensor_train_cal_split(
 ### Setting up the model
 
 We construct the exact same `ExactGP` model as in the GPyTorch tutorial (and as in the transductive example) as base model. 
-For details on constructing different types of GPR models please refer to the [GPyTorch documentation](https://gpytorch.readthedocs.io/en/latest/).
+For details on constructing different types of GPR models please refer to the [GPyTorch documentation](https://docs.gpytorch.ai/en/latest/).
 
 ```python
 class ExactGPModel(gpytorch.models.ExactGP):

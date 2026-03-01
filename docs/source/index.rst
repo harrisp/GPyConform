@@ -24,7 +24,7 @@ Key Features
 .. note::
 
    This documentation focuses primarily on the additional functionality provided by GPyConform. For detailed information on the usage and features of the
-   underlying GPyTorch functionality, please refer to the `GPyTorch documentation <https://gpytorch.readthedocs.io/en/latest/>`_.
+   underlying GPyTorch functionality, please refer to the `GPyTorch documentation <https://docs.gpytorch.ai/en/latest/>`_.
 
 .. note::
 
