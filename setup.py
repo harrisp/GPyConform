@@ -18,7 +18,7 @@ setup(
     },
     packages=find_packages(exclude=("tests", "docs")),
     install_requires=[
-        'gpytorch>=1.12,<1.15.1',
+        'gpytorch>=1.12,<1.15.2',
         'torch>=2.0',
         'linear-operator',
         'numpy'
